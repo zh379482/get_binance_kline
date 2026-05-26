@@ -30,8 +30,7 @@ jobs:
       run: ls -la
 
     - name: 5. 执行多币种清洗与下载
-      # 🚨 注意：如果你的脚本在 GitHub 上叫 1.py，请把下面改成 python 1.py
-      run: python get_binance.py 
+      run: python get_binance_kline.py 
 
     - name: 6. 自动提交 Parquet 文件回 GitHub 仓库
       run: |

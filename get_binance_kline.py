@@ -11,9 +11,25 @@ KLINE_COLUMNS = [
     "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"
 ]
 
+def get_all_usdt_symbols():
+    """从币安官方接口动态获取目前在线的所有 USDT 交易对"""
+    url = "https://api.binance.com/api/v3/exchangeInfo"
+    try:
+        res = requests.get(url, timeout=10).json()
+        symbols = [
+            s["symbol"] for s in res["symbols"]
+            if s["status"] == "TRADING" and s["quoteAsset"] == "USDT"
+        ]
+        # 排除掉一些类似 BEAR/BULL 的杠杆代币，只留正经现货，缩短下载时间
+        symbols = [s for s in symbols if "UPUSDT" not in s and "DOWNUSDT" not in s]
+        print(f"🔥 成功获取币安现货列表，当前共有 {len(symbols)} 个活跃的 USDT 交易对。")
+        return symbols
+    except Exception as e:
+        print(f"⚠️ 动态获取失败（可能由于接口风控），启用内置保底主力币种列表。")
+        return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"]
+
 def download_and_convert_kline(symbol, interval, year_month, output_dir):
     file_name = f"{symbol}-{interval}-{year_month}"
-    # 官方历史数据网站，GitHub Actions 直连速度极快
     url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/{interval}/{file_name}.zip"
     try:
         response = requests.get(url, timeout=10)
@@ -56,21 +72,39 @@ if __name__ == "__main__":
     INTERVAL = "1d"
     BASE_DIR = "binance_parquet_data"
 
-    # 📅 定制：2025年全12个月 + 2026年至今
+    # 📅 时间范围：2025 全年 + 2026 至今
     months_2025 = [f"2025-{str(i).zfill(2)}" for i in range(1, 13)]
     months_2026 = [f"2026-{str(i).zfill(2)}" for i in range(1, 6)]
     months_to_download = months_2025 + months_2026
 
-    # 🎯 绕过风控API，直接给出你最关心的前 15 个核心大币种！保证 100% 能下载成功
-    target_symbols = [
-        "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "ADAUSDT"
-    ]
+    # 1. 动态抓取币安此时此刻上架的所有币种
+    all_symbols = get_all_usdt_symbols()
+    
+    # 2. 🛡️ 智能去重机制 🛡️
+    # 检查仓库里哪些币种已经下载过了（比如之前成功的15个币），这次直接跳过，绝不重复劳动！
+    existing_symbols = []
+    if os.path.exists(BASE_DIR):
+        existing_symbols = [f for f in os.listdir(BASE_DIR) if os.path.isdir(os.path.join(BASE_DIR, f))]
+    
+    # 过滤出还没下载的币种
+    target_symbols = [s for s in all_symbols if s not in existing_symbols]
+    print(f"📊 检查完毕：已有 {len(existing_symbols)} 个币种，本次将冲刺剩余的 {len(target_symbols)} 个新币种！")
 
-    print(f"🌟 云端直连启动，开始下载核心币种数据...")
-    for symbol in target_symbols:
+    # 3. 🚨 分批控速机制：单次最多跑 80 个币，防止卡死超时
+    # 如果没跑完，下次你再点一下 “Run workflow” 开关，它会接着后面的币继续下载！
+    BATCH_SIZE = 80
+    run_pool = target_symbols[:BATCH_SIZE]
+    
+    if not run_pool:
+        print("🎉 奇迹发生！币安所有币种的数据已经全部收集完毕，无需重复运行！")
+        exit(0)
+
+    print(f"🚀 本批次正在全速轰鸣下载以下 {len(run_pool)} 个币种...")
+    
+    for symbol in run_pool:
         success_count = 0
         for ym in months_to_download:
             if download_and_convert_kline(symbol, INTERVAL, ym, output_dir=BASE_DIR):
                 success_count += 1
         if success_count > 0:
-            print(f"✨ {symbol} 同步成功 {success_count} 个月份。")
+            print(f"✨ {symbol} 成功同步 {success_count} 个月份。")

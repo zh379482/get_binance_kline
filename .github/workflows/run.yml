@@ -1,22 +1,27 @@
 name: Binance Data Sync Pipeline
 
 on:
-  workflow_dispatch: # 允许你在网页上手动点击运行
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     
-    # 强制让流水线使用 Node 24 运行，消灭警告
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     
+    # 显式声明赋予最高级别的写入权限
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
     - name: 1. 检出仓库代码
       uses: actions/checkout@v4
+      with:
+        # 关键修改：持久化 Token，确保后续 git push 拥有合法身份
+        token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: true
 
     - name: 2. 初始化 Python 环境
       uses: actions/setup-python@v5
@@ -26,16 +31,26 @@ jobs:
     - name: 3. 安装数据工程依赖
       run: pip install pandas pyarrow requests tqdm
 
-    - name: 4. 调试：查看当前目录下的文件名（防止名字写错报 code 2）
-      run: ls -la
+    - name: 4. 执行全币种日K下载与转换
+      run: python "$GITHUB_WORKSPACE/get_binance_kline.py"
 
-    - name: 5. 执行多币种清洗与下载
-      run: python get_binance_kline.py 
-
-    - name: 6. 自动提交 Parquet 文件回 GitHub 仓库
+    - name: 5. 强力推送 Parquet 文件回仓库（防御 code 128 专用）
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # 强制把生成的文件夹加入暂存区
         git add binance_parquet_data/
-        git commit -m "自动同步: 币安 K 线转 Parquet 归档" || echo "没有检测到文件变更"
-        git push origin HEAD
+        
+        # 检查是否有文件变更，有才提交
+        if git diff --staged --quiet; then
+          echo "没有检测到任何新生成的 Parquet 文件，无需推送。"
+        else
+          git commit -m "🤖 自动同步: 2026年全币种日K线归档"
+          
+          # 核心防御：在 push 前先进行强制 rebase 拉取，防止因本地指针混乱报 128 错误
+          git pull --rebase origin HEAD
+          
+          # 推送
+          git push origin HEAD
+        fi

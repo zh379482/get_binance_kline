@@ -72,9 +72,8 @@ if __name__ == "__main__":
     INTERVAL = "1d"
     BASE_DIR = "binance_parquet_data"
 
-    # 📅 时间范围：2025 全年 + 2026 至今
     months_2025 = [f"2025-{str(i).zfill(2)}" for i in range(1, 13)]
-    months_2026 = [f"2026-{str(i).zfill(2)}" for i in range(1, 6)]
+    months_2026 = [f"2026-{str(i).zfill(2)}" for i in range(1, 5)] 
     months_to_download = months_2025 + months_2026
 
     # 1. 动态抓取币安此时此刻上架的所有币种

@@ -7,29 +7,36 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     
-    # 赋予流水线写入仓库文件的权限
+    # 强制让流水线使用 Node 24 运行，消灭警告
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    
     permissions:
       contents: write
 
     steps:
-    - name: 1. 检出代码
+    - name: 1. 检出仓库代码
       uses: actions/checkout@v4
 
-    - name: 2. 初始化 Python
+    - name: 2. 初始化 Python 环境
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
     - name: 3. 安装数据工程依赖
-      run: pip install pandas pyarrow requests
+      run: pip install pandas pyarrow requests tqdm
 
-    - name: 4. 执行多币种清洗与下载
-      run: python get_binance.py
+    - name: 4. 调试：查看当前目录下的文件名（防止名字写错报 code 2）
+      run: ls -la
 
-    - name: 5. 自动提交 Parquet 文件回 GitHub 仓库
+    - name: 5. 执行多币种清洗与下载
+      # 🚨 注意：如果你的脚本在 GitHub 上叫 1.py，请把下面改成 python 1.py
+      run: python get_binance.py 
+
+    - name: 6. 自动提交 Parquet 文件回 GitHub 仓库
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add binance_parquet_data/
-        git commit -m "🤖 自动同步: 币安 K 线转 Parquet 归档" || echo "没有检测到文件变更"
+        git commit -m "自动同步: 币安 K 线转 Parquet 归档" || echo "没有检测到文件变更"
         git push origin HEAD

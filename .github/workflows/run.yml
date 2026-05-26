@@ -1,0 +1,35 @@
+name: Binance Data Sync Pipeline
+
+on:
+  workflow_dispatch: # 允许你在网页上手动点击运行
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    
+    # 赋予流水线写入仓库文件的权限
+    permissions:
+      contents: write
+
+    steps:
+    - name: 1. 检出代码
+      uses: actions/checkout@v4
+
+    - name: 2. 初始化 Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: 3. 安装数据工程依赖
+      run: pip install pandas pyarrow requests
+
+    - name: 4. 执行多币种清洗与下载
+      run: python get_binance.py
+
+    - name: 5. 自动提交 Parquet 文件回 GitHub 仓库
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add binance_parquet_data/
+        git commit -m "🤖 自动同步: 币安 K 线转 Parquet 归档" || echo "没有检测到文件变更"
+        git push origin HEAD

@@ -10,18 +10,16 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     
-    # 显式声明赋予最高级别的写入权限
+    # 显式声明读写权限
     permissions:
       contents: write
-      pull-requests: write
 
     steps:
     - name: 1. 检出仓库代码
       uses: actions/checkout@v4
       with:
-        # 关键修改：持久化 Token，确保后续 git push 拥有合法身份
+        # 使用内置 Token 初始化仓库凭证
         token: ${{ secrets.GITHUB_TOKEN }}
-        persist-credentials: true
 
     - name: 2. 初始化 Python 环境
       uses: actions/setup-python@v5
@@ -34,23 +32,29 @@ jobs:
     - name: 4. 执行全币种日K下载与转换
       run: python "$GITHUB_WORKSPACE/get_binance_kline.py"
 
-    - name: 5. 强力推送 Parquet 文件回仓库（防御 code 128 专用）
+    - name: 5. 注入 Token 强制推送（彻底粉碎 code 128）
+      env:
+        # 将内置 Token 转换为环境变量
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 强制把生成的文件夹加入暂存区
         git add binance_parquet_data/
         
-        # 检查是否有文件变更，有才提交
         if git diff --staged --quiet; then
           echo "没有检测到任何新生成的 Parquet 文件，无需推送。"
         else
-          git commit -m "🤖 自动同步: 2026年全币种日K线归档"
+          git commit -m "🤖 自动同步: 2026年币安日K线归档"
           
-          # 核心防御：在 push 前先进行强制 rebase 拉取，防止因本地指针混乱报 128 错误
+          # 核心修改：重新组装带 Token 的远程仓库 URL，让 Git 无法拒绝
+          # 格式: https://x-access-token:TOKEN@github.com/用户名/仓库名.git
+          REMOTE_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+          
+          # 强制将远程地址重置为带有最高权限的 URL
+          git remote set-url origin "$REMOTE_URL"
+          
+          # 先拉取防止冲突，再强力推送
           git pull --rebase origin HEAD
-          
-          # 推送
           git push origin HEAD
         fi

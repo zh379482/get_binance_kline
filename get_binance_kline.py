@@ -5,15 +5,18 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 
-# 币安标准 K 线列名，纯粹为了转 Parquet 贴标签
+# 币安标准 K 线列名
 KLINE_COLUMNS = [
     "open_time", "open", "high", "low", "close", "volume",
     "close_time", "quote_asset_volume", "number_of_trades",
     "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"
 ]
 
+CUSTOM_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
 def parse_raw_csv_to_df(file_content):
-    """【零清洗零改变】一字不差地读取币安原始CSV，保留所有原始格式"""
     try:
         df = pd.read_csv(BytesIO(file_content), header=None, keep_default_na=False)
         cols_count = df.shape[1]
@@ -26,22 +29,20 @@ def parse_raw_csv_to_df(file_content):
         return None
 
 def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, output_dir):
-    """核心：不再跳过币种，而是逐月、逐日精准盘点补漏"""
     print(f"------------------------------------------------------------")
-    print(f"🕵️ 正在盘点并原装抓取币种历史 (2020年起): {symbol}")
+    print(f"🕵️ 正在精准盘点并归档币种: {symbol}")
     
-    # ================= 【第一步：逐月检查 2020-2026，缺哪个月补哪个月】 =================
+    # 逐月盘点补漏
     for ym in historical_months:
         file_name = f"{symbol}-1d-{ym}"
         target_parquet = os.path.join(output_dir, symbol, f"{file_name}.parquet")
         
-        # 🛡️ 精准月份去重：如果这个月的 Parquet 已经存在了，才跳过这一个月，而不是跳过整个币！
         if os.path.exists(target_parquet):
             continue
             
         url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/1d/{file_name}.zip"
         try:
-            res = session.get(url, timeout=5)
+            res = session.get(url, headers=CUSTOM_HEADERS, timeout=5)
             if res.status_code == 200:
                 with zipfile.ZipFile(BytesIO(res.content)) as z:
                     csv_files = [f for f in z.namelist() if f.endswith('.csv')]
@@ -51,19 +52,17 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
                             if df is not None:
                                 os.makedirs(os.path.dirname(target_parquet), exist_ok=True)
                                 df.to_parquet(target_parquet, engine="pyarrow", compression="snappy", index=False)
-                                print(f"  ✨ [历史月包] 成功补全归档月份: {ym}")
+                                print(f"  ✨ [历史月包] 成功补全月份: {ym}")
         except:
             pass
 
-    # ================= 【第二步：动态更新当月天度包】 =================
+    # 动态更新当月天度包
     target_current_parquet = os.path.join(output_dir, symbol, f"{symbol}-1d-{current_ym}.parquet")
     today = datetime.now()
     
-    # 🛡️ 智能优化：如果是当月的动态文件，且今天已经更新过了，天度小包就没必要重复拼了
     if os.path.exists(target_current_parquet):
         file_time = datetime.fromtimestamp(os.path.getmtime(target_current_parquet))
         if file_time.date() == today.date():
-            # 今天已经更新过当月动态了，直接收工，省下网络请求
             return
 
     all_day_dfs = []
@@ -72,7 +71,7 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
         file_name = f"{symbol}-1d-{date_str}"
         url = f"https://data.binance.vision/data/spot/daily/klines/{symbol}/1d/{file_name}.zip"
         try:
-            res = session.get(url, timeout=3)
+            res = session.get(url, headers=CUSTOM_HEADERS, timeout=3)
             if res.status_code == 200:
                 with zipfile.ZipFile(BytesIO(res.content)) as z:
                     csv_files = [f for f in z.namelist() if f.endswith('.csv')]
@@ -96,7 +95,6 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
 if __name__ == "__main__":
     BASE_DIR = "binance_parquet_data"
 
-    # 1. 生成自 2020 年起所有的历史月份
     historical_months = []
     for year in range(2020, 2026):
         for month in range(1, 13):
@@ -106,45 +104,67 @@ if __name__ == "__main__":
     
     current_month_str = datetime.now().strftime("%Y-%m")
 
-    # 2. 强力加固生死簿：手写主流核心资产托底
-    history_and_active_symbols = [
+    # 🚨 【硬核加固：350+ 币安核心全代币宇宙】直接写死，无视一切网络屏蔽！
+    full_universe = [
         "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT",
         "MATICUSDT", "LTCUSDT", "UNIUSDT", "SHIBUSDT", "TRXUSDT", "ETCUSDT", "FILUSDT", "NEARUSDT", "ATOMUSDT", "XMRUSDT",
         "LUNAUSDT", "LUNCUSDT", "FTTUSDT", "BTTUSDT", "SRMUSDT", "ANCUSDT", "MIRUSDT", "YFIIUSDT", "WAVESUSDT", "OMGUSDT",
         "WNXMUSDT", "XEMUSDT", "ANTUSDT", "POLYUSDT", "IDRTUSDT", "KP3RUSDT", "OOKIUSDT", "UNFIUSDT", "FORUSDT", "AKROUSDT",
         "WUSDT", "TNSRUSDT", "TAOUSDT", "OMNIUSDT", "REZUSDT", "BBUSDT", "NOTUSDT", "IOUSDT", "ATHUSDT", "ZKUSDT",
-        "RENDERUSDT", "EIGENUSDT", "SCRUSDT", "COWUSDT", "CETUSDT", "PNUTUSDT", "ACTUSDT", "THEUSDT", "ACXUSDT", "ORCAUSDT"
+        "RENDERUSDT", "EIGENUSDT", "SCRUSDT", "COWUSDT", "CETUSDT", "PNUTUSDT", "ACTUSDT", "THEUSDT", "ACXUSDT", "ORCAUSDT",
+        "1INCHUSDT", "AAVEUSDT", "ACHUSDT", "ACMUSDT", "AERGOUSDT", "AGLDUSDT", "AIOZUSDT", "ALICEUSDT", "ALGOUSDT", "ALCXUSDT",
+        "ALPHAUSDT", "ALTUSDT", "AMBUSDT", "AMPUSDT", "ANKRUSDT", "APEUSDT", "API3USDT", "APTUSDT", "ARUSDT", "ARBMUSDT",
+        "ARKUSDT", "ARKMUSDT", "ARPAUSDT", "ASRUSDT", "ASTRUSDT", "ATAUSDT", "AUDIOUSDT", "AUCTIONUSDT", "AUDIOUSDT", "AVAXUSDT",
+        "AXSUSDT", "BADGERUSDT", "BAKEUSDT", "BALUSDT", "BANDUSDT", "BATUSDT", "BCHUSDT", "BEAMXUSDT", "BELUSDT", "BICOUSDT",
+        "BIFIUSDT", "BLURUSDT", "BLZUSDT", "BMPUSDT", "BNXUSDT", "BOBAUSDT", "BONDUSDT", "BOSONUSDT", "BSVUSDT", "BSWUSDT",
+        "BTCSTUSDT", "BURGERUSDT", "C98USDT", "CAKEUSDT", "CELOUSDT", "CELRUSDT", "CHZUSDT", "CHRUSDT", "CKBUSDT", "CLVUSDT",
+        "COMBOUSDT", "COMPUSDT", "COSUSDT", "COTIUSDT", "CRVUSDT", "CTSIUSDT", "CTKUSDT", "CVCUSDT", "CVXUSDT", "CYBERUSDT",
+        "DARUSDT", "DASHUSDT", "DATAUSDT", "DCRUSDT", "DEGOUSDT", "DENTUSDT", "DGBUSDT", "DIAUSDT", "DOCKUSDT", "DODOUSDT",
+        "DYDXUSDT", "DEXEUSDT", "DYMUSDT", "EDUUSDT", "EGLDUSDT", "ELFUSDT", "ENJUSDT", "ENSUSDT", "EOSUSDT", "EPXUSDT",
+        "ERNUSDT", "ETHFIUSDT", "SUIUSDT", "SEIUSDT", "TIAUSDT", "MANTAUSDT", "STRKUSDT", "AXLUSDT", "METISUSDT", "AEVOUSDT",
+        "FIDAUSDT", "FIOUSDT", "FLIXXUSDT", "FLOKIUSDT", "FLOWUSDT", "FLUXUSDT", "FRONTUSDT", "FXSUSDT", "GALIUSDT", "GALUSDT",
+        "GALAUSDT", "GFTUSDT", "GHSTUSDT", "GLMRUSDT", "GMTUSDT", "GMXUSDT", "GNSUSDT", "GRTUSDT", "GTCUSDT", "GVTUSDT",
+        "HARDUSDT", "HBARUSDT", "HFTUSDT", "HIFIUSDT", "HIGHUSDT", "HIVEUSDT", "HOOKUSDT", "HOTUSDT", "ICPUSDT", "ICXUSDT",
+        "IDUSDT", "IDEXUSDT", "ILVUSDT", "IMXUSDT", "INJUSDT", "IOSTUSDT", "IOTAUSDT", "IOTXUSDT", "IQUSDT", "IRISUSDT",
+        "JASMYUSDT", "JOEUSDT", "JSTUSDT", "JUPUSDT", "KAVAUSDT", "KDAUSDT", "KEYUSDT", "KMDUSDT", "KNCUSDT", "KSMUSDT",
+        "LDOUSDT", "LEVERUSDT", "INAUSDT", "LINAUSDT", "LIQUSDT", "LIQUIDUSDT", "LQTYUSDT", "LRCUSDT", "LSKUSDT", "LTOUSDT",
+        "MAGICUSDT", "MAVUSDT", "MBLUSDT", "MBOXUSDT", "MDTUSDT", "MDXUSDT", "MINAUSDT", "MKRUSDT", "MOVRUSDT", "MTLUSDT",
+        "NBIUSDT", "NBSUSDT", "NEXOUSDT", "NKNUSDT", "NMRUSDT", "NTRNUSDT", "NULSUSDT", "OCEANUSDT", "OGUSDT", "OGNUSDT",
+        "ONEUSDT", "ONGUSDT", "ONTUSDT", "OXTUSDT", "PAXGUSDT", "PEPEUSDT", "PERPUSDT", "PHBUSDT", "PIVXUSDT", "PIXELUSDT",
+        "PLAYUSDT", "PNKUSDT", "POLYXUSDT", "PONDUSDT", "POWRUSDT", "PPTUSDT", "PROMSUSDT", "PROMUSDT", "PROSUSDT", "PYTHUSDT",
+        "QIUSDT", "QLCUSDT", "QNTUSDT", "QTUMUSDT", "QUICKUSDT", "RADUSDT", "RAMPUSDT", "RAREUSDT", "RAYUSDT", "REEFUSDT",
+        "REIUSDT", "RENUSDT", "REQUSDT", "RिफUSDT", "RIFUSDT", "RLCUSDT", "RNDRUSDT", "RONINUSDT", "ROSEUSDT", "RPLUSDT",
+        "RSRUSDT", "RUNEUSDT", "RVNUSDT", "SANDUSDT", "SANTUSDT", "SCUSDT", "SFPUSDT", "SKLUSDT", "SLEEPMUSDT", "SLPUSDT",
+        "SNTUSDT", "SNXUSDT", "SPELLUSDT", "STEEMUSDT", "STGUSDT", "STMXUSDT", "STORJUSDT", "STPTUSDT", "STRATUSDT", "STRAXUSDT",
+        "STXUSDT", "SUNUSDT", "SUPERUSDT", "SUSHIUSDT", "SXPUSDT", "SYNUSDT", "SYSUSDT", "TUSDT", "TWTUSDT", "THETAUSDT",
+        "TKOUSDT", "TLMUSDT", "TOMOUSDT", "TRBUSDT", "TROYUSDT", "TRUUSDT", "TURBOUSDT", "UMAUSDT", "UNFIUSDT", "USDCUSDT",
+        "USTCUSDT", "UTKUSDT", "VETUSDT", "VGXUSDT", "VIBUSDT", "VIDTUSDT", "VITEUSDT", "VOXELUSDT", "VTHOUSDT", "WANUSDT",
+        "WAXPUSDT", "WBTUSDT", "WIFUSDT", "WINGUSDT", "WNXMUSDT", "WOOUSDT", "WRXUSDT", "WTCUSDT", "XECUSDT", "XLMUSDT",
+        "XNOUSDT", "XRDUSDT", "XTAGUSDT", "XTZUSDT", "XVGUSDT", "XVSUSDT", "YFIUSDT", "YGGUSDT", "ZECUSDT", "ZENUSDT", "ZILUSDT"
     ]
+
+    http_session = requests.Session()
+
+    # 🚨 安全去重和限制：单次只放行 60 个尚未通关的币种
+    # 彻底杜绝爆磁盘、爆网络请求限流导致的中途下线
+    BATCH_SIZE = 60
     
-    # 初始化网络长连接池
-    http_session = requests.get_binance_session if hasattr(requests, 'get_binance_session') else requests.Session()
-    active_symbols = []
-
-    # 3. 双域名交叉获取币安在线全量现货代币名单
-    endpoints = [
-        "https://api.binance.vision/api/v3/exchangeInfo",
-        "https://api.binance.com/api/v3/exchangeInfo",
-        "https://api1.binance.com/api/v3/exchangeInfo"
-    ]
-    
-    for url in endpoints:
-        try:
-            active_res = http_session.get(url, timeout=6).json()
-            active_symbols = [s["symbol"] for s in active_res["symbols"] if s["quoteAsset"] == "USDT"]
-            active_symbols = [s for s in active_symbols if "UPUSDT" not in s and "DOWNUSDT" not in s]
-            if active_symbols:
-                print(f"✅ 成功截获币安在线活跃币种名单！包含 {len(active_symbols)} 个 USDT 交易对。")
-                break
-        except Exception as e:
-            pass
-
-    full_universe = list(set(history_and_active_symbols + active_symbols))
-
-    print(f"\n🔥 『2020纪元：全月份颗粒级精准补漏版』流水线正式启动...")
+    print(f"🔥 『2020纪元：350+硬核全资产版』流水线正式启动...")
     print(f"📊 宇宙总币种数: {len(full_universe)}")
     
-    # 4. 🎛️ 每一个币种都必须进去盘点，绝不整体跳过
-    for symbol in sorted(full_universe):
+    processed = 0
+    for symbol in sorted(list(set(full_universe))):
+        if processed >= BATCH_SIZE:
+            print(f"\n🛑 已达到本批次安全存储上限（{BATCH_SIZE}个币种），收工并提交。")
+            break
+            
+        current_month_parquet = os.path.join(BASE_DIR, symbol, f"{symbol}-1d-{current_month_str}.parquet")
+        if os.path.exists(current_month_parquet):
+            file_time = datetime.fromtimestamp(os.path.getmtime(current_month_parquet))
+            if file_time.date() == datetime.now().date():
+                continue  # 已完全通关的币种，0毫秒闪过，不占名额！
+                
         sync_all_data_for_symbol(http_session, symbol, historical_months, current_month_str, BASE_DIR)
+        processed += 1
 
-    print(f"\n🎉 恭喜！漏洞已完美修复，全历史原始数据补遗大获全胜！")
+    print(f"\n🎉 本批次硬核攻坚结束！")

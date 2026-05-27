@@ -5,7 +5,7 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 
-# 币安标准 K 线列名，仅做标签映射
+# 币安标准 K 线列名，纯粹为了转 Parquet 贴标签
 KLINE_COLUMNS = [
     "open_time", "open", "high", "low", "close", "volume",
     "close_time", "quote_asset_volume", "number_of_trades",
@@ -13,7 +13,7 @@ KLINE_COLUMNS = [
 ]
 
 def parse_raw_csv_to_df(file_content):
-    """【零清洗零改变】一字不差地读取币安原始CSV，保留所有空值、格式与行数"""
+    """【零清洗零改变】一字不差地读取币安原始CSV，保留所有原始格式"""
     try:
         df = pd.read_csv(BytesIO(file_content), header=None, keep_default_na=False)
         cols_count = df.shape[1]
@@ -26,22 +26,22 @@ def parse_raw_csv_to_df(file_content):
         return None
 
 def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, output_dir):
-    """核心：利用Session复用通道，全量原装抓取单个币种历史"""
+    """核心：不再跳过币种，而是逐月、逐日精准盘点补漏"""
     print(f"------------------------------------------------------------")
-    print(f"🕵️ 正在原装抓取币种历史 (2020年起): {symbol}")
+    print(f"🕵️ 正在盘点并原装抓取币种历史 (2020年起): {symbol}")
     
-    # ================= 【第一步：下载历史纯原始整月包】 =================
+    # ================= 【第一步：逐月检查 2020-2026，缺哪个月补哪个月】 =================
     for ym in historical_months:
         file_name = f"{symbol}-1d-{ym}"
         target_parquet = os.path.join(output_dir, symbol, f"{file_name}.parquet")
         
-        # 🛡️ 智能判定：如果这个月的 Parquet 已经躺在仓库里了，直接跳过！
+        # 🛡️ 精准月份去重：如果这个月的 Parquet 已经存在了，才跳过这一个月，而不是跳过整个币！
         if os.path.exists(target_parquet):
             continue
             
         url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/1d/{file_name}.zip"
         try:
-            res = session.get(url, timeout=5) # 使用复用 Session 请求
+            res = session.get(url, timeout=5)
             if res.status_code == 200:
                 with zipfile.ZipFile(BytesIO(res.content)) as z:
                     csv_files = [f for f in z.namelist() if f.endswith('.csv')]
@@ -51,21 +51,28 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
                             if df is not None:
                                 os.makedirs(os.path.dirname(target_parquet), exist_ok=True)
                                 df.to_parquet(target_parquet, engine="pyarrow", compression="snappy", index=False)
-                                print(f"  ✨ [原始月包] 成功归档: {ym}")
+                                print(f"  ✨ [历史月包] 成功补全归档月份: {ym}")
         except:
             pass
 
-    # ================= 【第二步：动态攻坚未结月/新币真空期】 =================
+    # ================= 【第二步：动态更新当月天度包】 =================
     target_current_parquet = os.path.join(output_dir, symbol, f"{symbol}-1d-{current_ym}.parquet")
     today = datetime.now()
-    all_day_dfs = []
     
+    # 🛡️ 智能优化：如果是当月的动态文件，且今天已经更新过了，天度小包就没必要重复拼了
+    if os.path.exists(target_current_parquet):
+        file_time = datetime.fromtimestamp(os.path.getmtime(target_current_parquet))
+        if file_time.date() == today.date():
+            # 今天已经更新过当月动态了，直接收工，省下网络请求
+            return
+
+    all_day_dfs = []
     for day in range(1, today.day):
         date_str = f"{current_ym}-{str(day).zfill(2)}"
         file_name = f"{symbol}-1d-{date_str}"
         url = f"https://data.binance.vision/data/spot/daily/klines/{symbol}/1d/{file_name}.zip"
         try:
-            res = session.get(url, timeout=3) # 使用复用 Session 请求
+            res = session.get(url, timeout=3)
             if res.status_code == 200:
                 with zipfile.ZipFile(BytesIO(res.content)) as z:
                     csv_files = [f for f in z.namelist() if f.endswith('.csv')]
@@ -84,12 +91,12 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
         
         os.makedirs(os.path.dirname(target_current_parquet), exist_ok=True)
         merged_df.to_parquet(target_current_parquet, engine="pyarrow", compression="snappy", index=False)
-        print(f"  🚀 [动态天度] 原始合体成功 -> 更新至昨日")
+        print(f"  🚀 [动态天度] 当月数据原始合体成功")
 
 if __name__ == "__main__":
     BASE_DIR = "binance_parquet_data"
 
-    # 1. 生成自2020年起所有的历史月份
+    # 1. 生成自 2020 年起所有的历史月份
     historical_months = []
     for year in range(2020, 2026):
         for month in range(1, 13):
@@ -99,39 +106,45 @@ if __name__ == "__main__":
     
     current_month_str = datetime.now().strftime("%Y-%m")
 
-    # 2. 【生死簿白名单】：已退市及新上线的特殊币种
+    # 2. 强力加固生死簿：手写主流核心资产托底
     history_and_active_symbols = [
+        "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT",
+        "MATICUSDT", "LTCUSDT", "UNIUSDT", "SHIBUSDT", "TRXUSDT", "ETCUSDT", "FILUSDT", "NEARUSDT", "ATOMUSDT", "XMRUSDT",
         "LUNAUSDT", "LUNCUSDT", "FTTUSDT", "BTTUSDT", "SRMUSDT", "ANCUSDT", "MIRUSDT", "YFIIUSDT", "WAVESUSDT", "OMGUSDT",
         "WNXMUSDT", "XEMUSDT", "ANTUSDT", "POLYUSDT", "IDRTUSDT", "KP3RUSDT", "OOKIUSDT", "UNFIUSDT", "FORUSDT", "AKROUSDT",
         "WUSDT", "TNSRUSDT", "TAOUSDT", "OMNIUSDT", "REZUSDT", "BBUSDT", "NOTUSDT", "IOUSDT", "ATHUSDT", "ZKUSDT",
         "RENDERUSDT", "EIGENUSDT", "SCRUSDT", "COWUSDT", "CETUSDT", "PNUTUSDT", "ACTUSDT", "THEUSDT", "ACXUSDT", "ORCAUSDT"
     ]
     
-    # 初始化复用型网络会话池
-    http_session = requests.Session()
-    
-    # 3. 动态获取全币安在线活跃币
-    try:
-        active_res = http_session.get("https://api.binance.com/api/v3/exchangeInfo", timeout=5).json()
-        active_symbols = [s["symbol"] for s in active_res["symbols"] if s["status"] == "TRADING" and s["quoteAsset"] == "USDT"]
-        active_symbols = [s for s in active_symbols if "UPUSDT" not in s and "DOWNUSDT" not in s]
-        full_universe = list(set(history_and_active_symbols + active_symbols))
-    except Exception as e:
-        full_universe = history_and_active_symbols
+    # 初始化网络长连接池
+    http_session = requests.get_binance_session if hasattr(requests, 'get_binance_session') else requests.Session()
+    active_symbols = []
 
-    print(f"🔥 『2020纪元：狂暴全量数据下载版』流水线正式启动...")
-    print(f"📊 待处理宇宙代币总数: {len(full_universe)} (已彻底解除单次运行数量限制！)")
+    # 3. 双域名交叉获取币安在线全量现货代币名单
+    endpoints = [
+        "https://api.binance.vision/api/v3/exchangeInfo",
+        "https://api.binance.com/api/v3/exchangeInfo",
+        "https://api1.binance.com/api/v3/exchangeInfo"
+    ]
     
-    # 4. 🎛️ 彻底砸碎限制，开启大水漫灌循环
+    for url in endpoints:
+        try:
+            active_res = http_session.get(url, timeout=6).json()
+            active_symbols = [s["symbol"] for s in active_res["symbols"] if s["quoteAsset"] == "USDT"]
+            active_symbols = [s for s in active_symbols if "UPUSDT" not in s and "DOWNUSDT" not in s]
+            if active_symbols:
+                print(f"✅ 成功截获币安在线活跃币种名单！包含 {len(active_symbols)} 个 USDT 交易对。")
+                break
+        except Exception as e:
+            pass
+
+    full_universe = list(set(history_and_active_symbols + active_symbols))
+
+    print(f"\n🔥 『2020纪元：全月份颗粒级精准补漏版』流水线正式启动...")
+    print(f"📊 宇宙总币种数: {len(full_universe)}")
+    
+    # 4. 🎛️ 每一个币种都必须进去盘点，绝不整体跳过
     for symbol in sorted(full_universe):
-        # 🛡️ 跳过检查：如果这个币种今天已经完全扫过一遍了，秒跳过
-        current_month_parquet = os.path.join(BASE_DIR, symbol, f"{symbol}-1d-{current_month_str}.parquet")
-        if os.path.exists(current_month_parquet):
-            file_time = datetime.fromtimestamp(os.path.getmtime(current_month_parquet))
-            if file_time.date() == datetime.now().date():
-                continue # 0.001秒闪过
-                
-        # 全力开工
         sync_all_data_for_symbol(http_session, symbol, historical_months, current_month_str, BASE_DIR)
 
-    print(f"\n🎉 恭喜！全网所有币种（共计 {len(full_universe)} 个）全历史原始数据同步大获全胜！")
+    print(f"\n🎉 恭喜！漏洞已完美修复，全历史原始数据补遗大获全胜！")

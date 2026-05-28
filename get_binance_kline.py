@@ -59,12 +59,6 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
     # 动态更新当月天度包
     target_current_parquet = os.path.join(output_dir, symbol, f"{symbol}-1d-{current_ym}.parquet")
     today = datetime.now()
-    
-    if os.path.exists(target_current_parquet):
-        file_time = datetime.fromtimestamp(os.path.getmtime(target_current_parquet))
-        if file_time.date() == today.date():
-            return
-
     all_day_dfs = []
     for day in range(1, today.day):
         date_str = f"{current_ym}-{str(day).zfill(2)}"
@@ -104,7 +98,7 @@ if __name__ == "__main__":
     
     current_month_str = datetime.now().strftime("%Y-%m")
 
-    # 🚨 【硬核加固：350+ 币安核心全代币宇宙】直接写死，无视一切网络屏蔽！
+    # 350+ 硬核代币宇宙
     full_universe = [
         "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT",
         "MATICUSDT", "LTCUSDT", "UNIUSDT", "SHIBUSDT", "TRXUSDT", "ETCUSDT", "FILUSDT", "NEARUSDT", "ATOMUSDT", "XMRUSDT",
@@ -112,59 +106,60 @@ if __name__ == "__main__":
         "WNXMUSDT", "XEMUSDT", "ANTUSDT", "POLYUSDT", "IDRTUSDT", "KP3RUSDT", "OOKIUSDT", "UNFIUSDT", "FORUSDT", "AKROUSDT",
         "WUSDT", "TNSRUSDT", "TAOUSDT", "OMNIUSDT", "REZUSDT", "BBUSDT", "NOTUSDT", "IOUSDT", "ATHUSDT", "ZKUSDT",
         "RENDERUSDT", "EIGENUSDT", "SCRUSDT", "COWUSDT", "CETUSDT", "PNUTUSDT", "ACTUSDT", "THEUSDT", "ACXUSDT", "ORCAUSDT",
-        "1INCHUSDT", "AAVEUSDT", "ACHUSDT", "ACMUSDT", "AERGOUSDT", "AGLDUSDT", "AIOZUSDT", "ALICEUSDT", "ALGOUSDT", "ALCXUSDT",
+        "1INCHUSDT", "AAVEUSDT", "ACHUSDT", "ACACM", "AERGOUSDT", "AGLDUSDT", "AIOZUSDT", "ALICEUSDT", "ALGOUSDT", "ALCXUSDT",
         "ALPHAUSDT", "ALTUSDT", "AMBUSDT", "AMPUSDT", "ANKRUSDT", "APEUSDT", "API3USDT", "APTUSDT", "ARUSDT", "ARBMUSDT",
-        "ARKUSDT", "ARKMUSDT", "ARPAUSDT", "ASRUSDT", "ASTRUSDT", "ATAUSDT", "AUDIOUSDT", "AUCTIONUSDT", "AUDIOUSDT", "AVAXUSDT",
-        "AXSUSDT", "BADGERUSDT", "BAKEUSDT", "BALUSDT", "BANDUSDT", "BATUSDT", "BCHUSDT", "BEAMXUSDT", "BELUSDT", "BICOUSDT",
-        "BIFIUSDT", "BLURUSDT", "BLZUSDT", "BMPUSDT", "BNXUSDT", "BOBAUSDT", "BONDUSDT", "BOSONUSDT", "BSVUSDT", "BSWUSDT",
-        "BTCSTUSDT", "BURGERUSDT", "C98USDT", "CAKEUSDT", "CELOUSDT", "CELRUSDT", "CHZUSDT", "CHRUSDT", "CKBUSDT", "CLVUSDT",
+        "ARKUSDT", "ARKMUSDT", "ARPAUSDT", "ASRUSDT", "ASTRUSDT", "ATAUSDT", "AUDIOUSDT", "AUCTIONUSDT", "AXSUSDT",
+        "BADGERUSDT", "BAKEUSDT", "BALUSDT", "BANDUSDT", "BATUSDT", "BCHUSDT", "BEAMXUSDT", "BELUSDT", "BICOUSDT",
+        "BIFIUSDT", "BLURUSDT", "BLZUSDT", "BNXUSDT", "BOBAUSDT", "BONDUSDT", "BOSONUSDT", "BSVUSDT", "BSWUSDT",
+        "BURGERUSDT", "C98USDT", "CAKEUSDT", "CELOUSDT", "CELRUSDT", "CHZUSDT", "CHRUSDT", "CKBUSDT", "CLVUSDT",
         "COMBOUSDT", "COMPUSDT", "COSUSDT", "COTIUSDT", "CRVUSDT", "CTSIUSDT", "CTKUSDT", "CVCUSDT", "CVXUSDT", "CYBERUSDT",
         "DARUSDT", "DASHUSDT", "DATAUSDT", "DCRUSDT", "DEGOUSDT", "DENTUSDT", "DGBUSDT", "DIAUSDT", "DOCKUSDT", "DODOUSDT",
         "DYDXUSDT", "DEXEUSDT", "DYMUSDT", "EDUUSDT", "EGLDUSDT", "ELFUSDT", "ENJUSDT", "ENSUSDT", "EOSUSDT", "EPXUSDT",
         "ERNUSDT", "ETHFIUSDT", "SUIUSDT", "SEIUSDT", "TIAUSDT", "MANTAUSDT", "STRKUSDT", "AXLUSDT", "METISUSDT", "AEVOUSDT",
-        "FIDAUSDT", "FIOUSDT", "FLIXXUSDT", "FLOKIUSDT", "FLOWUSDT", "FLUXUSDT", "FRONTUSDT", "FXSUSDT", "GALIUSDT", "GALUSDT",
-        "GALAUSDT", "GFTUSDT", "GHSTUSDT", "GLMRUSDT", "GMTUSDT", "GMXUSDT", "GNSUSDT", "GRTUSDT", "GTCUSDT", "GVTUSDT",
-        "HARDUSDT", "HBARUSDT", "HFTUSDT", "HIFIUSDT", "HIGHUSDT", "HIVEUSDT", "HOOKUSDT", "HOTUSDT", "ICPUSDT", "ICXUSDT",
-        "IDUSDT", "IDEXUSDT", "ILVUSDT", "IMXUSDT", "INJUSDT", "IOSTUSDT", "IOTAUSDT", "IOTXUSDT", "IQUSDT", "IRISUSDT",
-        "JASMYUSDT", "JOEUSDT", "JSTUSDT", "JUPUSDT", "KAVAUSDT", "KDAUSDT", "KEYUSDT", "KMDUSDT", "KNCUSDT", "KSMUSDT",
-        "LDOUSDT", "LEVERUSDT", "INAUSDT", "LINAUSDT", "LIQUSDT", "LIQUIDUSDT", "LQTYUSDT", "LRCUSDT", "LSKUSDT", "LTOUSDT",
-        "MAGICUSDT", "MAVUSDT", "MBLUSDT", "MBOXUSDT", "MDTUSDT", "MDXUSDT", "MINAUSDT", "MKRUSDT", "MOVRUSDT", "MTLUSDT",
-        "NBIUSDT", "NBSUSDT", "NEXOUSDT", "NKNUSDT", "NMRUSDT", "NTRNUSDT", "NULSUSDT", "OCEANUSDT", "OGUSDT", "OGNUSDT",
-        "ONEUSDT", "ONGUSDT", "ONTUSDT", "OXTUSDT", "PAXGUSDT", "PEPEUSDT", "PERPUSDT", "PHBUSDT", "PIVXUSDT", "PIXELUSDT",
-        "PLAYUSDT", "PNKUSDT", "POLYXUSDT", "PONDUSDT", "POWRUSDT", "PPTUSDT", "PROMSUSDT", "PROMUSDT", "PROSUSDT", "PYTHUSDT",
-        "QIUSDT", "QLCUSDT", "QNTUSDT", "QTUMUSDT", "QUICKUSDT", "RADUSDT", "RAMPUSDT", "RAREUSDT", "RAYUSDT", "REEFUSDT",
-        "REIUSDT", "RENUSDT", "REQUSDT", "RिफUSDT", "RIFUSDT", "RLCUSDT", "RNDRUSDT", "RONINUSDT", "ROSEUSDT", "RPLUSDT",
-        "RSRUSDT", "RUNEUSDT", "RVNUSDT", "SANDUSDT", "SANTUSDT", "SCUSDT", "SFPUSDT", "SKLUSDT", "SLEEPMUSDT", "SLPUSDT",
-        "SNTUSDT", "SNXUSDT", "SPELLUSDT", "STEEMUSDT", "STGUSDT", "STMXUSDT", "STORJUSDT", "STPTUSDT", "STRATUSDT", "STRAXUSDT",
-        "STXUSDT", "SUNUSDT", "SUPERUSDT", "SUSHIUSDT", "SXPUSDT", "SYNUSDT", "SYSUSDT", "TUSDT", "TWTUSDT", "THETAUSDT",
-        "TKOUSDT", "TLMUSDT", "TOMOUSDT", "TRBUSDT", "TROYUSDT", "TRUUSDT", "TURBOUSDT", "UMAUSDT", "UNFIUSDT", "USDCUSDT",
+        "FIDAUSDT", "FIOUSDT", "FLOKIUSDT", "FLOWUSDT", "FLUXUSDT", "FRONTUSDT", "FXSUSDT", "GALUSDT", "GALAUSDT", "GFTUSDT",
+        "GHSTUSDT", "GLMRUSDT", "GMTUSDT", "GMXUSDT", "GNSUSDT", "GRTUSDT", "GTCUSDT", "HARDUSDT", "HBARUSDT", "HFTUSDT",
+        "HIFIUSDT", "HIGHUSDT", "HIVEUSDT", "HOOKUSDT", "HOTUSDT", "ICPUSDT", "ICXUSDT", "IDUSDT", "IDEXUSDT", "ILVUSDT",
+        "IMXUSDT", "INJUSDT", "IOSTUSDT", "IOTAUSDT", "IOTXUSDT", "IQUSDT", "IRISUSDT", "JASMYUSDT", "JOEUSDT", "JSTUSDT",
+        "JUPUSDT", "KAVAUSDT", "KDAUSDT", "KEYUSDT", "KMDUSDT", "KNCUSDT", "KSMUSDT", "LDOUSDT", "LEVERUSDT", "LINAUSDT",
+        "LQTYUSDT", "LRCUSDT", "LSKUSDT", "LTOUSDT", "MAGICUSDT", "MAVUSDT", "MBLUSDT", "MBOXUSDT", "MDTUSDT", "MDXUSDT",
+        "MINAUSDT", "MKRUSDT", "MOVRUSDT", "MTLUSDT", "NKNUSDT", "NMRUSDT", "NTRNUSDT", "NULSUSDT", "OCEANUSDT", "OGUSDT",
+        "OGNUSDT", "ONEUSDT", "ONGUSDT", "ONTUSDT", "OXTUSDT", "PAXGUSDT", "PEPEUSDT", "PERPUSDT", "PHBUSDT", "PIVXUSDT",
+        "PIXELUSDT", "POLYXUSDT", "PONDUSDT", "POWRUSDT", "PROMUSDT", "PROSUSDT", "PYTHUSDT", "QNTUSDT", "QTUMUSDT",
+        "QUICKUSDT", "RADUSDT", "RAREUSDT", "RAYUSDT", "REEFUSDT", "REIUSDT", "RENUSDT", "REQUSDT", "RIFUSDT", "RLCUSDT",
+        "RONINUSDT", "ROSEUSDT", "RPLUSDT", "RSRUSDT", "RUNEUSDT", "RVNUSDT", "SANDUSDT", "SANTUSDT", "SCUSDT", "SFPUSDT",
+        "SKLUSDT", "SLPUSDT", "SNTUSDT", "SNXUSDT", "SPELLUSDT", "STEEMUSDT", "STGUSDT", "STMXUSDT", "STORJUSDT", "STPTUSDT",
+        "STRAXUSDT", "STXUSDT", "SUNUSDT", "SUPERUSDT", "SUSHIUSDT", "SXPUSDT", "SYNUSDT", "SYSUSDT", "TUSDT", "TWTUSDT",
+        "THETAUSDT", "TKOUSDT", "TLMUSDT", "TRBUSDT", "TROYUSDT", "TRUUSDT", "TURBOUSDT", "UMAUSDT", "UNFIUSDT", "USDCUSDT",
         "USTCUSDT", "UTKUSDT", "VETUSDT", "VGXUSDT", "VIBUSDT", "VIDTUSDT", "VITEUSDT", "VOXELUSDT", "VTHOUSDT", "WANUSDT",
-        "WAXPUSDT", "WBTUSDT", "WIFUSDT", "WINGUSDT", "WNXMUSDT", "WOOUSDT", "WRXUSDT", "WTCUSDT", "XECUSDT", "XLMUSDT",
-        "XNOUSDT", "XRDUSDT", "XTAGUSDT", "XTZUSDT", "XVGUSDT", "XVSUSDT", "YFIUSDT", "YGGUSDT", "ZECUSDT", "ZENUSDT", "ZILUSDT"
+        "WAXPUSDT", "WIFUSDT", "WINGUSDT", "WOOUSDT", "WRXUSDT", "XECUSDT", "XLMUSDT", "XNOUSDT", "XTZUSDT", "XVGUSDT",
+        "XVSUSDT", "YFIUSDT", "YGGUSDT", "ZECUSDT", "ZENUSDT", "ZILUSDT"
     ]
 
     http_session = requests.Session()
 
-    # 🚨 安全去重和限制：单次只放行 60 个尚未通关的币种
-    # 彻底杜绝爆磁盘、爆网络请求限流导致的中途下线
-    BATCH_SIZE = 60
+    # 🚨 精准小灶分批：单次只放行 15 个【残缺不全】的币种，绝不再触发任何误判
+    BATCH_SIZE = 15
     
-    print(f"🔥 『2020纪元：350+硬核全资产版』流水线正式启动...")
-    print(f"📊 宇宙总币种数: {len(full_universe)}")
+    print(f"🔥 『2020纪元：基于文件数精准去重版』流水线启动...")
+    print(f"📊 目标全宇宙总数: {len(full_universe)}")
     
     processed = 0
     for symbol in sorted(list(set(full_universe))):
         if processed >= BATCH_SIZE:
-            print(f"\n🛑 已达到本批次安全存储上限（{BATCH_SIZE}个币种），收工并提交。")
+            print(f"\n🛑 已安全填满本批次 15 个补漏名额，收工提交！")
             break
             
-        current_month_parquet = os.path.join(BASE_DIR, symbol, f"{symbol}-1d-{current_month_str}.parquet")
-        if os.path.exists(current_month_parquet):
-            file_time = datetime.fromtimestamp(os.path.getmtime(current_month_parquet))
-            if file_time.date() == datetime.now().date():
-                continue  # 已完全通关的币种，0毫秒闪过，不占名额！
+        symbol_dir = os.path.join(BASE_DIR, symbol)
+        
+        # 🛡️ 【硬核数格子判定】：如果一个币种文件夹存在，且里面的 Parquet 文件数 >= 10 个
+        # 证明这个老币肯定被历史大批次轰炸过（至少下载了几年历史），今天直接判定它通过，不占 15 个的名额！
+        if os.path.exists(symbol_dir):
+            existing_files = [f for f in os.listdir(symbol_dir) if f.endswith('.parquet')]
+            if len(existing_files) >= 10:
+                continue # 0 毫秒闪避已通关代币！
                 
+        # 没通过数格子（文件数极少或没有文件夹）的残缺币种，立刻送去满额抓取
         sync_all_data_for_symbol(http_session, symbol, historical_months, current_month_str, BASE_DIR)
         processed += 1
 
-    print(f"\n🎉 本批次硬核攻坚结束！")
+    print(f"\n🎉 本批次 15 个残缺币种攻坚结束！")

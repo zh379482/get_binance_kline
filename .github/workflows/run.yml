@@ -7,7 +7,6 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     
-    # 🌟 核心：直接在最顶层明明白白地告诉 GitHub 允许这个脚本改写仓库
     permissions:
       contents: write
 
@@ -23,7 +22,6 @@ jobs:
     - name: 3. 安装工具包
       run: pip install pandas pyarrow requests tqdm
 
-    # ❌ 删除了之前那个卡死人的第4步代理！现在直连速度起飞！
 
     - name: 4. 执行免代理清洗脚本
       run: python "$GITHUB_WORKSPACE/get_binance_kline.py"
@@ -38,7 +36,6 @@ jobs:
         if git diff --staged --quiet; then
           echo "没有新文件，无需更新。"
         else
-          git commit -m "🤖 自动同步: 币安历史数据"
-          # 🌟 使用强推流，彻底粉碎 128 错误
+          git commit -m "自动同步: 币安历史数据"
           git push origin HEAD:${{ github.ref }}
         fi

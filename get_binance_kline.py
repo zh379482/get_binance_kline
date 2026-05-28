@@ -5,7 +5,6 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 
-# 币安标准 K 线列名
 KLINE_COLUMNS = [
     "open_time", "open", "high", "low", "close", "volume",
     "close_time", "quote_asset_volume", "number_of_trades",
@@ -29,10 +28,6 @@ def parse_raw_csv_to_df(file_content):
         return None
 
 def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, output_dir):
-    print(f"------------------------------------------------------------")
-    print(f"🕵️ 正在精准盘点并归档币种: {symbol}")
-    
-    # 逐月盘点补漏
     for ym in historical_months:
         file_name = f"{symbol}-1d-{ym}"
         target_parquet = os.path.join(output_dir, symbol, f"{file_name}.parquet")
@@ -52,11 +47,9 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
                             if df is not None:
                                 os.makedirs(os.path.dirname(target_parquet), exist_ok=True)
                                 df.to_parquet(target_parquet, engine="pyarrow", compression="snappy", index=False)
-                                print(f"  ✨ [历史月包] 成功补全月份: {ym}")
         except:
             pass
 
-    # 动态更新当月天度包
     target_current_parquet = os.path.join(output_dir, symbol, f"{symbol}-1d-{current_ym}.parquet")
     today = datetime.now()
     all_day_dfs = []
@@ -84,8 +77,6 @@ def sync_all_data_for_symbol(session, symbol, historical_months, current_ym, out
         
         os.makedirs(os.path.dirname(target_current_parquet), exist_ok=True)
         merged_df.to_parquet(target_current_parquet, engine="pyarrow", compression="snappy", index=False)
-        print(f"  🚀 [动态天度] 当月数据原始合体成功")
-
 if __name__ == "__main__":
     BASE_DIR = "binance_parquet_data"
 
@@ -98,7 +89,6 @@ if __name__ == "__main__":
     
     current_month_str = datetime.now().strftime("%Y-%m")
 
-    # 350+ 硬核代币宇宙
     full_universe = [
         "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT",
         "MATICUSDT", "LTCUSDT", "UNIUSDT", "SHIBUSDT", "TRXUSDT", "ETCUSDT", "FILUSDT", "NEARUSDT", "ATOMUSDT", "XMRUSDT",
@@ -136,30 +126,19 @@ if __name__ == "__main__":
     ]
 
     http_session = requests.Session()
-
-    # 🚨 精准小灶分批：单次只放行 15 个【残缺不全】的币种，绝不再触发任何误判
     BATCH_SIZE = 15
-    
-    print(f"🔥 『2020纪元：基于文件数精准去重版』流水线启动...")
-    print(f"📊 目标全宇宙总数: {len(full_universe)}")
     
     processed = 0
     for symbol in sorted(list(set(full_universe))):
         if processed >= BATCH_SIZE:
-            print(f"\n🛑 已安全填满本批次 15 个补漏名额，收工提交！")
             break
             
         symbol_dir = os.path.join(BASE_DIR, symbol)
         
-        # 🛡️ 【硬核数格子判定】：如果一个币种文件夹存在，且里面的 Parquet 文件数 >= 10 个
-        # 证明这个老币肯定被历史大批次轰炸过（至少下载了几年历史），今天直接判定它通过，不占 15 个的名额！
         if os.path.exists(symbol_dir):
             existing_files = [f for f in os.listdir(symbol_dir) if f.endswith('.parquet')]
             if len(existing_files) >= 10:
-                continue # 0 毫秒闪避已通关代币！
+                continue
                 
-        # 没通过数格子（文件数极少或没有文件夹）的残缺币种，立刻送去满额抓取
         sync_all_data_for_symbol(http_session, symbol, historical_months, current_month_str, BASE_DIR)
         processed += 1
-
-    print(f"\n🎉 本批次 15 个残缺币种攻坚结束！")

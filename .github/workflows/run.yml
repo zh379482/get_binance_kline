@@ -17,6 +17,10 @@ jobs:
     steps:
     - name: 1. 检出仓库代码
       uses: actions/checkout@v4
+      with:
+        # 🔑 【全剧终极解密】：设置为 0 代表拉取全部历史提交（深克隆）
+        # 只有这样，Git 才有能力一口气吞下 350 个币种的变动，彻底绝杀 128 报错！
+        fetch-depth: 0
 
     - name: 2. 安装 Python 环境
       uses: actions/setup-python@v5

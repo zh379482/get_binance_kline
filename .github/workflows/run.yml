@@ -1,14 +1,18 @@
 name: Binance Data Sync Pipeline
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 手动触发点击
+
+env:
+  # 🧼 顺应官方新规：强行启用 Node 24 引擎，完美消灭 Deprecated 警告！
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write
+      contents: write # 显式赐予写权限，彻底绝杀 128 错误
 
     steps:
     - name: 1. 检出仓库代码
@@ -19,23 +23,28 @@ jobs:
       with:
         python-version: '3.12'
 
+    # 🚨 注意：因为清洗脚本里用到了 numpy，我们在这里把 numpy 补上！
     - name: 3. 安装工具包
-      run: pip install pandas pyarrow requests tqdm
+      run: pip install pandas pyarrow requests tqdm numpy
 
+    - name: 4. 执行原始行情抓取（实时缝合当天）
+      run: python get_binance_kline.py
 
-    - name: 4. 执行免代理清洗脚本
-      run: python "$GITHUB_WORKSPACE/get_binance_kline.py"
+    - name: 5. 执行就地清洗（原地加工量化特征层）
+      run: python clean_local_data.py
 
-    - name: 5. 强行存入 GitHub 仓库
+    - name: 6. 统一打包并强行存入 GitHub 仓库
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        git add binance_parquet_data/
+        # 🧱 原始数据和清洗特征文件夹，统统加入暂存区，一起搭顺风车
+        git add binance_parquet_data/ cleaned_parquet_data/
         
         if git diff --staged --quiet; then
-          echo "没有新文件，无需更新。"
+          echo "没有任何新数据更新，完美跳过。"
         else
-          git commit -m "自动同步: 币安历史数据"
+          git commit -m "🤖 自动同步：原始K线与特征工程层双轨滚动更新"
+          # 🛡️ 稳健推送：确保推送到当前的 main 分支
           git push origin HEAD:${{ github.ref }}
         fi

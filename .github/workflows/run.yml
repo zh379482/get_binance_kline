@@ -3,21 +3,15 @@ name: Binance Data Sync Pipeline
 on:
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    
     permissions:
       contents: write
 
     steps:
     - name: 1. 检出仓库代码
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # 保持深克隆，稳定版本树
 
     - name: 2. 安装 Python 环境
       uses: actions/setup-python@v5
@@ -25,37 +19,22 @@ jobs:
         python-version: '3.12'
 
     - name: 3. 安装工具包
-      run: pip install pandas pyarrow requests tqdm numpy
+      run: pip install pandas pyarrow requests tqdm
 
-    - name: 4. 执行原始行情抓取（实时缝合当天）
-      run: python get_binance_kline.py
+    - name: 4. 执行免代理清洗脚本
+      run: python "$GITHUB_WORKSPACE/get_binance_kline.py"
 
-    - name: 5. 执行就地清洗（原地加工量化特征层）
-      run: python clean_local_data.py
-
-    - name: 6. 统一打包、性能调优并强行存入仓库
+    - name: 5. 强行存入 GitHub 仓库
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 🚀 【大文件流终极黑客调优】：彻底撑爆 Git 传输管线，防 128 报错
-        git config --global http.postBuffer 1048576000     # 将上传缓冲区撑大到 1GB
-        git config --global http.maxRequestBuffer 1048576000
-        git config --global core.compression 0             # 禁用 Git 冗余压缩，防内存炸裂
-        
-        # 🧱 原始数据和清洗特征一起加入暂存区
-        git add binance_parquet_data/ cleaned_parquet_data/
+        git add binance_parquet_data/
         
         if git diff --staged --quiet; then
-          echo "没有任何新数据更新，完美跳过。"
+          echo "没有新文件，无需更新。"
         else
-          git commit -m "🤖 自动同步：原始K线与特征工程层双轨滚动更新"
-          
-          # 🛡️ 【3次自动重试硬核防御】：防止 GitHub 远程服务器偶发性限流断开
-          echo "🚀 开始强力推流至 GitHub 仓库..."
-          for i in {1..3}; do
-            git push origin HEAD:${{ github.ref }} && exit 0 || echo "⚠️ 提示：第 $i 次推流失败，正在尝试重试..."
-            sleep 5
-          done
-          exit 1 # 如果3次都失败了，才真正抛出错误
+          git commit -m "自动同步: 币安历史数据"
+          git commit -m "自动同步: 币安历史数据"
+          git push origin HEAD:${{ github.ref }}
         fi
